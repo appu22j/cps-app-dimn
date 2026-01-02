@@ -80,25 +80,25 @@
     <!-- JAVASCRIPT LOGIC -->
     <script>
         // --- DATA ---
-        // UPDATED DIMENSIONS: Length reduced by 10cm for all vehicles for better fit accuracy
+        // UPDATED DIMENSIONS: Calculated as Feet * 30 = CM
         const TRUCK_TYPES = [
-            // Mini Trucks
-            { id: 10, name: 'Tata Ace (Chhota Hathi)', l: 210, w: 150, h: 150, maxWeight: 750, icon: '🐘', desc: 'Mini Truck, Standard Ace Gold' },
-            { id: 11, name: 'Dost / Small LCV', l: 240, w: 162, h: 165, maxWeight: 1250, icon: '🚚', desc: 'Ashok Leyland Dost' },
-            { id: 12, name: 'Bada Dost / Medium LCV', l: 285, w: 175, h: 175, maxWeight: 1850, icon: '🚛', desc: 'i3/i4 Goods transport' },
+            // Mini Trucks (Approx feet conversion)
+            { id: 10, name: 'Tata Ace (Chhota Hathi)', l: 210, w: 150, h: 150, maxWeight: 750, icon: '🐘', desc: 'Mini Truck (7ft)' },
+            { id: 11, name: 'Dost / Small LCV', l: 240, w: 162, h: 165, maxWeight: 1250, icon: '🚚', desc: 'Ashok Leyland Dost (8ft)' },
+            { id: 12, name: 'Bada Dost / Medium LCV', l: 300, w: 175, h: 175, maxWeight: 1850, icon: '🚛', desc: 'i3/i4 Goods transport (10ft)' },
             
-            // Commercial Containers (Inner Dimensions)
-            { id: 13, name: '12ft Box Truck', l: 355, w: 200, h: 200, maxWeight: 2500, icon: '📦', desc: 'Standard 12ft container' },
-            { id: 14, name: '14ft Box Truck', l: 415, w: 210, h: 210, maxWeight: 3500, icon: '📦', desc: 'Standard 14ft container' },
-            { id: 15, name: '17ft Box Truck', l: 508, w: 220, h: 220, maxWeight: 5000, icon: '📦', desc: 'Medium Cargo (17ft)' },
+            // Commercial Containers (Explicit Feet * 30)
+            { id: 13, name: '12ft Box Truck', l: 360, w: 200, h: 200, maxWeight: 2500, icon: '📦', desc: 'Standard 12ft container' },
+            { id: 14, name: '14ft Box Truck', l: 420, w: 210, h: 210, maxWeight: 3500, icon: '📦', desc: 'Standard 14ft container' },
+            { id: 15, name: '17ft Box Truck', l: 510, w: 220, h: 220, maxWeight: 5000, icon: '📦', desc: 'Medium Cargo (17ft)' },
             
-            // User Corrected 20ft
-            { id: 20, name: '20ft Container Truck', l: 590, w: 240, h: 240, maxWeight: 7000, icon: '🇮🇳', desc: 'Standard Indian 20ft' },
+            // 20ft (20 * 30 = 600)
+            { id: 20, name: '20ft Container Truck', l: 600, w: 240, h: 240, maxWeight: 7000, icon: '🇮🇳', desc: 'Standard Indian 20ft' },
             
             // Large Trucks
             { id: 16, name: '22ft Box Truck', l: 660, w: 240, h: 240, maxWeight: 10000, icon: '🏗️', desc: 'Heavy Cargo / Container' },
             { id: 17, name: '24ft Box Truck', l: 720, w: 240, h: 240, maxWeight: 12000, icon: '🏗️', desc: 'Full-sized large container' },
-            { id: 18, name: '32ft Container', l: 965, w: 240, h: 240, maxWeight: 15000, icon: '🚢', desc: 'High-capacity SXL/MXL' },
+            { id: 18, name: '32ft Container', l: 960, w: 240, h: 240, maxWeight: 15000, icon: '🚢', desc: 'High-capacity SXL/MXL' },
         ];
 
         // --- STATE ---
