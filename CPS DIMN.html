@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Load Master - Truck Calculator</title>
+    <!-- Tailwind CSS for Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom Animations */
+        @keyframes loading-bar {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+        .animate-loading-bar {
+            animation: loading-bar 2.4s ease-in-out forwards;
+        }
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.5s ease-out forwards;
+        }
+        @keyframes slide-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up {
+            animation: slide-up 0.4s ease-out forwards;
+        }
+        
+        /* Toggle Switch Styling */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #f97316;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #f97316;
+        }
+        
+        /* Utility */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800 min-h-screen flex flex-col">
+
+    <!-- LOADING SCREEN (Hidden by JS after timeout) -->
+    <div id="splash-screen" class="fixed inset-0 bg-orange-500 flex flex-col items-center justify-center z-50 text-white">
+        <div class="animate-bounce mb-6">
+            <i data-lucide="truck" width="100" height="100" stroke-width="1.5"></i>
+        </div>
+        <h1 class="text-4xl font-bold tracking-wider mb-2">LOAD MASTER</h1>
+        <div class="w-48 h-2 bg-orange-700 rounded-full overflow-hidden">
+            <div class="h-full bg-white animate-loading-bar"></div>
+        </div>
+        <p class="mt-4 text-orange-100 font-light">Calibrating Dimensions...</p>
+    </div>
+
+    <!-- HEADER -->
+    <header class="bg-orange-500 text-white p-4 shadow-lg sticky top-0 z-20" id="main-header" style="display:none;">
+        <div class="max-w-3xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <i data-lucide="truck" width="24" height="24"></i>
+                <h1 class="text-lg font-bold tracking-wide">LOAD MASTER</h1>
+            </div>
+            <button id="btn-header-reset" onclick="handleNewPlan()" class="text-xs bg-orange-600 hover:bg-orange-700 px-3 py-1 rounded-full flex items-center gap-1 transition-colors hidden">
+                <i data-lucide="refresh-cw" width="12" height="12"></i> New Plan
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="max-w-3xl mx-auto p-4 md:p-6 flex-grow w-full" id="app-content" style="display:none;">
+        <!-- Content injected by JavaScript -->
+    </main>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- DATA ---
+        const TRUCK_TYPES = [
+            // Indian Truck Models
+            { id: 10, name: 'Tata Ace (Chhota Hathi)', l: 214, w: 140, h: 140, maxWeight: 750, icon: '🐘', desc: 'Mini Truck, narrow streets' },
+            { id: 11, name: 'Dost / Small LCV', l: 250, w: 160, h: 170, maxWeight: 1250, icon: '🚚', desc: 'Ashok Leyland Dost equivalent' },
+            { id: 12, name: 'Bada Dost / Medium LCV', l: 300, w: 180, h: 190, maxWeight: 1800, icon: '🚛', desc: 'Goods transport' },
+            // Indian/Global Box Truck Sizes
+            { id: 13, name: '12ft Box Truck', l: 365, w: 200, h: 200, maxWeight: 2500, icon: '📦', desc: 'Standard 12ft container' },
+            { id: 14, name: '14ft Box Truck', l: 425, w: 210, h: 210, maxWeight: 3500, icon: '📦', desc: 'Standard 14ft container' },
+            { id: 15, name: '17ft Box Truck', l: 520, w: 220, h: 220, maxWeight: 5000, icon: '📦', desc: 'Medium Cargo (17-20ft size)' },
+            { id: 16, name: '22ft Box Truck', l: 670, w: 240, h: 240, maxWeight: 10000, icon: '🏗️', desc: 'Heavy Cargo / Container' },
+            { id: 17, name: '24ft Box Truck', l: 730, w: 240, h: 240, maxWeight: 12000, icon: '🏗️', desc: 'Full-sized large container' },
+            { id: 18, name: '32ft Container', l: 975, w: 240, h: 250, maxWeight: 16000, icon: '🚢', desc: 'High-capacity, multi-axle' },
+            // Original Defaults
+            { id: 1, name: 'Pickup Truck (Generic)', l: 200, w: 150, h: 100, maxWeight: 1000, icon: '🛻', desc: 'Standard bed' },
+            { id: 5, name: '26ft Box Truck (USA)', l: 780, w: 250, h: 250, maxWeight: 4500, icon: '🚛', desc: 'Largest moving truck' },
+        ];
+
+        // --- STATE ---
+        let state = {
+            step: 1,
+            selectedTruck: null,
+            boxManifest: [],
+            currentBox: { name: '', l: '', w: '', h: '', weight: '', qty: 1, stackable: true },
+            customTruck: { name: 'Custom Truck', l: '', w: '', h: '', maxWeight: '' }
+        };
+
+        // --- INITIALIZATION ---
+        window.onload = function() {
+            lucide.createIcons();
+            // Simulate Loading Screen
+            setTimeout(() => {
+                document.getElementById('splash-screen').style.display = 'none';
+                document.getElementById('main-header').style.display = 'block';
+                document.getElementById('app-content').style.display = 'block';
+                render();
+            }, 2500);
+        };
+
+        // --- LOGIC FUNCTIONS ---
+
+        // 1. Geometric Calculation (Uniform Load)
+        function calculateGeometricMax(truck, box) {
+            if (!truck || !box.l || !box.w || !box.h) return 0;
+            
+            const T = [truck.l, truck.w, truck.h];
+            const B = [parseFloat(box.l), parseFloat(box.w), parseFloat(box.h)];
+            
+            if (B.some(d => d <= 0) || B.some((d, i) => d > T[i] && i === 2)) return 0; 
+
+            // Weight Check
+            let weightLimitCount = Infinity;
+            if (box.weight && box.weight > 0 && truck.maxWeight) {
+                weightLimitCount = Math.floor(truck.maxWeight / parseFloat(box.weight));
+            }
+
+            // Grid Logic
+            const getGridCount = (t, b) => Math.floor(t[0] / b[0]) * Math.floor(t[1] / b[1]) * Math.floor(t[2] / b[2]);
+            
+            const orientations = [
+                [B[0], B[1], B[2]], [B[0], B[2], B[1]],
+                [B[1], B[0], B[2]], [B[1], B[2], B[0]],
+                [B[2], B[0], B[1]], [B[2], B[1], B[0]],
+            ];
+
+            let maxGeometricCount = 0;
+            
+            if (box.stackable === false) {
+                const floor1 = Math.floor(T[0] / B[0]) * Math.floor(T[1] / B[1]);
+                const floor2 = Math.floor(T[0] / B[1]) * Math.floor(T[1] / B[0]);
+                maxGeometricCount = Math.max(floor1, floor2);
+            } else {
+                orientations.forEach(o => {
+                    const count = getGridCount(T, o);
+                    if (count > maxGeometricCount) maxGeometricCount = count;
+                });
+            }
+
+            return Math.min(maxGeometricCount, weightLimitCount);
+        }
+
+        // 2. Total Load Calculation
+        function calculateLoadStatus(truck, manifest) {
+            if (!truck || manifest.length === 0) return { fits: true, percentVol: 0, percentWeight: 0, msg: "Empty Load", reason: "", estimatedFit: 0, totalWeight: 0, totalBoxes: 0 };
+
+            let totalWeight = 0;
+            let totalRequestedBoxes = 0;
+            
+            manifest.forEach(item => {
+                const qty = parseFloat(item.qty) || 0;
+                const weight = parseFloat(item.weight) || 0;
+                totalRequestedBoxes += qty;
+                totalWeight += weight * qty;
+            });
+
+            const percentWeight = (totalWeight / truck.maxWeight) * 100;
+            
+            // Check for Uniform Load
+            const firstItem = manifest[0];
+            const isUniformLoad = manifest.every(item => 
+                item.l === firstItem.l && 
+                item.w === firstItem.w && 
+                item.h === firstItem.h &&
+                item.stackable === firstItem.stackable
+            );
+
+            if (isUniformLoad) {
+                const maxPossibleInTruck = calculateGeometricMax(truck, firstItem);
+                
+                let fits = true;
+                let msg = "Load Fits Perfectly";
+                let reason = "Your boxes fit within the truck's grid.";
+                
+                if (percentWeight > 100) {
+                    fits = false;
+                    msg = "Overweight";
+                    reason = `Total weight (${totalWeight}kg) exceeds truck capacity (${truck.maxWeight}kg).`;
+                } else if (totalRequestedBoxes > maxPossibleInTruck) {
+                    fits = false;
+                    msg = "Not Enough Space";
+                    reason = `Geometrically, only ${maxPossibleInTruck} boxes fit in this truck's dimensions (${truck.l}x${truck.w}x${truck.h}).`;
+                }
+
+                return { 
+                    fits, 
+                    percentVol: (totalRequestedBoxes / maxPossibleInTruck) * 100,
+                    percentWeight, 
+                    msg, 
+                    totalWeight, 
+                    reason, 
+                    estimatedFit: maxPossibleInTruck,
+                    totalBoxes: totalRequestedBoxes,
+                    mode: 'Exact Geometry'
+                };
+            } 
+
+            // Mixed Load (Volume Estimate)
+            let usedVolume = 0;
+            const truckVol = truck.l * truck.w * truck.h;
+
+            manifest.forEach(item => {
+                const qty = parseFloat(item.qty) || 0;
+                const l = parseFloat(item.l);
+                const w = parseFloat(item.w);
+                const h = parseFloat(item.h);
+
+                if (item.stackable) {
+                    usedVolume += (l * w * h) * qty;
+                } else {
+                    usedVolume += (l * w * truck.h) * qty;
+                }
+            });
+
+            const packingEfficiency = 0.90; 
+            const adjustedTruckVol = truckVol * packingEfficiency;
+            const percentVol = (usedVolume / adjustedTruckVol) * 100;
+
+            let fits = true;
+            let msg = "Load Fits";
+            let reason = "";
+            let estimatedFit = totalRequestedBoxes;
+
+            if (percentWeight > 100) {
+                fits = false;
+                msg = "Overweight";
+                reason = `Total weight (${totalWeight.toFixed(1)}kg) exceeds limit.`;
+            } else if (percentVol > 100) {
+                fits = false;
+                msg = "Not Enough Space";
+                reason = `Total volume exceeds the logical packing space (approx 90% of truck).`;
+            }
+
+            if (!fits) {
+                const limitingFactor = Math.max(percentWeight, percentVol);
+                const fitRatio = 100 / limitingFactor;
+                estimatedFit = Math.floor(totalRequestedBoxes * fitRatio);
+            }
+
+            return { fits, percentVol, percentWeight, msg, totalWeight, reason, estimatedFit, totalBoxes: totalRequestedBoxes, mode: 'Volume Estimate' };
+        }
+
+        // --- ACTIONS ---
+
+        function selectTruck(truckId) {
+            const truck = TRUCK_TYPES.find(t => t.id === truckId);
+            if(truck) {
+                state.selectedTruck = truck;
+                state.step = 3;
+                render();
+            }
+        }
+
+        function handleCustomTruckSubmit(e) {
+            e.preventDefault();
+            const l = parseFloat(state.customTruck.l);
+            const w = parseFloat(state.customTruck.w);
+            const h = parseFloat(state.customTruck.h);
+            const maxWeight = parseFloat(state.customTruck.maxWeight);
+
+            if (l > 0 && w > 0 && h > 0 && maxWeight > 0) {
+                const customTruck = {
+                    id: Date.now(),
+                    name: state.customTruck.name || 'Custom Truck',
+                    l, w, h, maxWeight,
+                    icon: '📐',
+                    desc: 'User defined dimensions'
+                };
+                state.selectedTruck = customTruck;
+                state.step = 3;
+                render();
+            } else {
+                alert("Please enter valid dimensions > 0");
+            }
+        }
+
+        function updateCustomTruck(field, value) {
+            state.customTruck[field] = value;
+        }
+
+        function updateCurrentBox(field, value) {
+            // Handle checkbox boolean vs string inputs
+            if(field === 'stackable') {
+                state.currentBox[field] = value;
+            } else {
+                state.currentBox[field] = value;
+            }
+        }
+
+        function addBox(e) {
+            e.preventDefault();
+            const { l, w, h, qty } = state.currentBox;
+            if (l && w && h && qty) {
+                state.boxManifest.push({ ...state.currentBox, id: Date.now() });
+                // Reset form but keep stackable default
+                state.currentBox = { name: '', l: '', w: '', h: '', weight: '', qty: 1, stackable: true };
+                // Force input clears
+                document.getElementById('boxForm').reset();
+                render();
+            }
+        }
+
+        function removeBox(id) {
+            state.boxManifest = state.boxManifest.filter(b => b.id !== id);
+            render();
+        }
+
+        function goToStep(s) {
+            state.step = s;
+            render();
+        }
+
+        function handleNewPlan() {
+            state.boxManifest = [];
+            state.currentBox = { name: '', l: '', w: '', h: '', weight: '', qty: 1, stackable: true };
+            state.selectedTruck = null;
+            state.step = 1;
+            render();
+        }
+
+        // --- RENDERERS ---
+
+        function render() {
+            const app = document.getElementById('app-content');
+            const resetBtn = document.getElementById('btn-header-reset');
+            
+            // Header button visibility
+            if(state.step > 1) resetBtn.classList.remove('hidden');
+            else resetBtn.classList.add('hidden');
+
+            app.innerHTML = ''; // Clear current view
+
+            if (state.step === 1) {
+                renderStep1(app);
+            } else if (state.step === 3) {
+                renderStep3(app);
+            } else if (state.step === 4) {
+                renderStep4(app);
+            }
+
+            // Re-initialize icons after DOM change
+            lucide.createIcons();
+        }
+
+        function renderStep1(container) {
+            let html = `
+                <div class="animate-fade-in">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Select Truck Type</h2>
+                    <p class="text-center text-gray-500 mb-6 text-sm">Choose the vehicle for your load or define custom specs.</p>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        ${TRUCK_TYPES.map(truck => `
+                            <button onclick="selectTruck(${truck.id})" class="bg-white p-4 rounded-xl shadow-sm border-2 border-transparent hover:border-orange-500 hover:shadow-md transition-all text-left flex items-center gap-4 group w-full">
+                                <div class="text-4xl group-hover:scale-110 transition-transform">${truck.icon}</div>
+                                <div>
+                                    <h3 class="font-bold text-gray-800">${truck.name}</h3>
+                                    <div class="text-xs text-gray-500">${truck.desc}</div>
+                                    <div class="text-xs bg-orange-50 text-orange-700 mt-1 inline-block px-2 py-0.5 rounded">
+                                        ${truck.l}x${truck.w}x${truck.h} cm (${truck.maxWeight} kg)
+                                    </div>
+                                </div>
+                            </button>
+                        `).join('')}
+                    </div>
+
+                    <!-- CUSTOM TRUCK FORM -->
+                    <div class="mt-8 bg-white p-6 rounded-2xl shadow-xl border-l-4 border-blue-500">
+                        <h3 class="text-xl font-bold text-blue-800 flex items-center gap-2 mb-4">
+                            <i data-lucide="settings" width="24" height="24"></i> Define Custom Truck
+                        </h3>
+                        <form onsubmit="handleCustomTruckSubmit(event)" class="space-y-4">
+                            <input type="text" placeholder="Truck Name" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                                oninput="updateCustomTruck('name', this.value)" value="${state.customTruck.name}">
+                            <div class="grid grid-cols-4 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">L (cm)</label>
+                                    <input type="number" required min="1" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500" 
+                                        oninput="updateCustomTruck('l', this.value)" value="${state.customTruck.l}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">W (cm)</label>
+                                    <input type="number" required min="1" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500" 
+                                        oninput="updateCustomTruck('w', this.value)" value="${state.customTruck.w}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">H (cm)</label>
+                                    <input type="number" required min="1" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500" 
+                                        oninput="updateCustomTruck('h', this.value)" value="${state.customTruck.h}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Max Kg</label>
+                                    <input type="number" required min="1" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500" 
+                                        oninput="updateCustomTruck('maxWeight', this.value)" value="${state.customTruck.maxWeight}">
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+                                <i data-lucide="zap" width="18" height="18"></i> Use Custom Truck
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function renderStep3(container) {
+            const truck = state.selectedTruck;
+            const boxesHtml = state.boxManifest.map((item, idx) => {
+                const singleMax = calculateGeometricMax(truck, item);
+                return `
+                <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex justify-between items-center mb-2">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-orange-100 text-orange-700 font-bold w-8 h-8 rounded flex items-center justify-center text-sm">${idx + 1}</div>
+                        <div>
+                            <div class="font-bold text-gray-800 text-sm">${item.name || `Box #${idx+1}`} <span class="text-gray-400 font-normal">x ${item.qty}</span></div>
+                            <div class="text-xs text-gray-500 flex gap-2">
+                                <span>${item.l}x${item.w}x${item.h}</span>
+                                ${item.weight ? `<span>• ${item.weight}kg</span>` : ''}
+                                <span class="${item.stackable ? 'text-green-600' : 'text-red-500'}">${item.stackable ? 'Stackable' : 'No Stack'}</span>
+                            </div>
+                            <div class="text-[10px] text-blue-500 mt-0.5">Max cap if empty: ${singleMax}</div>
+                        </div>
+                    </div>
+                    <button onclick="removeBox(${item.id})" class="text-gray-300 hover:text-red-500 p-2"><i data-lucide="trash-2" width="16" height="16"></i></button>
+                </div>`;
+            }).join('');
+
+            let html = `
+                <div class="animate-fade-in space-y-6">
+                    <!-- Selected Truck Info -->
+                    <div class="bg-orange-50 border border-orange-200 p-3 rounded-lg flex items-center justify-between">
+                        <div class="flex items-center gap-2 text-sm text-orange-800">
+                            <i data-lucide="truck" width="16" height="16"></i>
+                            <span class="font-bold">${truck.name}</span>
+                            <span class="text-orange-600 text-xs">(${truck.maxWeight}kg Max | ${truck.l}x${truck.w}x${truck.h})</span>
+                        </div>
+                        <button onclick="goToStep(1)" class="text-xs text-orange-600 font-bold hover:underline">Change</button>
+                    </div>
+
+                    <!-- Input Form -->
+                    <div class="bg-white p-5 rounded-2xl shadow-lg border-l-4 border-orange-500">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-lg font-bold text-gray-800">Add Box Details</h2>
+                            <div class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">Dims in CM</div>
+                        </div>
+                        <form id="boxForm" onsubmit="addBox(event)" class="space-y-4">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="col-span-2 sm:col-span-1">
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Name</label>
+                                    <input type="text" placeholder="e.g. Box A" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
+                                        oninput="updateCurrentBox('name', this.value)">
+                                </div>
+                                <div class="col-span-2 sm:col-span-1">
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Quantity</label>
+                                    <input type="number" min="1" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
+                                        value="${state.currentBox.qty}" oninput="updateCurrentBox('qty', this.value)">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Length</label>
+                                    <input type="number" required min="1" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:border-orange-500"
+                                        oninput="updateCurrentBox('l', this.value)">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Width</label>
+                                    <input type="number" required min="1" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:border-orange-500"
+                                        oninput="updateCurrentBox('w', this.value)">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Height</label>
+                                    <input type="number" required min="1" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:border-orange-500"
+                                        oninput="updateCurrentBox('h', this.value)">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 pt-2">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Weight (kg)</label>
+                                    <input type="number" min="0" class="w-full p-2 border border-gray-300 rounded-lg outline-none focus:border-orange-500"
+                                        oninput="updateCurrentBox('weight', this.value)">
+                                </div>
+                                <div class="flex items-end pb-2">
+                                    <label class="flex items-center cursor-pointer select-none">
+                                        <div class="relative">
+                                            <input type="checkbox" class="sr-only toggle-checkbox" checked onchange="updateCurrentBox('stackable', this.checked)">
+                                            <div class="block w-10 h-6 bg-gray-300 rounded-full transition-colors toggle-label"></div>
+                                            <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform" style="transform: ${state.currentBox.stackable ? 'translateX(100%)' : 'translateX(0)'}"></div>
+                                        </div>
+                                        <div class="ml-3 text-sm text-gray-700 font-medium">Stackable?</div>
+                                    </label>
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-gray-800 text-white font-bold py-3 rounded-xl hover:bg-black transition-colors flex items-center justify-center gap-2">
+                                <i data-lucide="plus" width="18" height="18"></i> Add to List
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Manifest List -->
+                    ${state.boxManifest.length > 0 ? `
+                        <div class="animate-slide-up">
+                            <div class="flex justify-between items-end mb-2">
+                                <h3 class="text-gray-500 font-bold uppercase text-sm tracking-wider">Current Manifest</h3>
+                                <span class="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">${state.boxManifest.reduce((acc, i) => acc + parseInt(i.qty), 0)} boxes total</span>
+                            </div>
+                            <div class="space-y-2">
+                                ${boxesHtml}
+                            </div>
+                            <button onclick="goToStep(4)" class="w-full bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-200 hover:bg-orange-700 transition-all flex items-center justify-center gap-2 text-lg mt-4">
+                                Calculate Final Load
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function renderStep4(container) {
+            const loadStatus = calculateLoadStatus(state.selectedTruck, state.boxManifest);
+            
+            const gradientClass = loadStatus.fits ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600';
+            const reasonHtml = loadStatus.fits ? 
+                `<div class="text-green-100 text-sm">${loadStatus.mode === 'Exact Geometry' ? 'Your boxes fit perfectly within the grid (Exact Match).' : 'Your manifest fits within logical stacking limits.'}</div>` :
+                `<div class="bg-white/20 p-3 rounded-lg text-sm text-white/90 backdrop-blur-sm mt-4 text-left">
+                    <div class="flex gap-2 mb-1"><i data-lucide="alert-triangle" width="18" height="18" class="text-yellow-300"></i> <span class="font-bold">Reason:</span></div>
+                    <p class="pl-6 mb-3">${loadStatus.reason}</p>
+                    <div class="border-t border-white/30 pt-3 pl-6">
+                        <div class="text-xs uppercase opacity-75 mb-1">${loadStatus.mode === 'Exact Geometry' ? 'Max Geometric Capacity' : 'Estimated Capacity'}</div>
+                        <div class="font-bold text-xl">~ ${loadStatus.estimatedFit} boxes</div>
+                        <div class="text-xs opacity-75">out of ${loadStatus.totalBoxes} requested.</div>
+                    </div>
+                </div>`;
+
+            let html = `
+                <div class="animate-fade-in space-y-6">
+                    <div class="rounded-2xl shadow-xl overflow-hidden text-white text-center p-6 ${gradientClass}">
+                        <div class="mb-2 opacity-90 text-sm font-bold uppercase tracking-wider">Load Status</div>
+                        <div class="text-3xl font-bold mb-3">${loadStatus.msg}</div>
+                        ${reasonHtml}
+                    </div>
+
+                    ${!loadStatus.fits ? `
+                    <div class="bg-red-50 border-l-4 border-red-400 p-4 rounded-lg flex gap-3 text-red-800 text-xs leading-relaxed">
+                        <i data-lucide="info" width="16" height="16" class="shrink-0"></i>
+                        <p><strong>Calculation Method:</strong> ${loadStatus.mode === 'Exact Geometry' ? 'Used EXACT GEOMETRIC STACKING because you are loading a single box type.' : 'Used VOLUME ESTIMATION because you have a mixed load.'}</p>
+                    </div>` : ''}
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <div class="text-gray-500 text-xs font-bold uppercase mb-2 flex items-center gap-1"><i data-lucide="scale" width="14" height="14"></i> Weight Load</div>
+                            <div class="text-2xl font-bold text-gray-800">${Math.round(loadStatus.percentWeight)}%</div>
+                            <div class="w-full bg-gray-200 h-2 rounded-full mt-2 overflow-hidden">
+                                <div class="h-full ${loadStatus.percentWeight > 100 ? 'bg-red-500' : 'bg-orange-500'}" style="width: ${Math.min(loadStatus.percentWeight, 100)}%"></div>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">${loadStatus.totalWeight.toFixed(1)} / ${state.selectedTruck.maxWeight} kg</div>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <div class="text-gray-500 text-xs font-bold uppercase mb-2 flex items-center gap-1"><i data-lucide="layers" width="14" height="14"></i> Volume Usage</div>
+                            <div class="text-2xl font-bold text-gray-800">${Math.round(loadStatus.percentVol)}%</div>
+                            <div class="w-full bg-gray-200 h-2 rounded-full mt-2 overflow-hidden">
+                                <div class="h-full ${loadStatus.percentVol > 100 ? 'bg-red-500' : 'bg-blue-500'}" style="width: ${Math.min(loadStatus.percentVol, 100)}%"></div>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">Based on ${loadStatus.mode}</div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 pt-4">
+                        <button onclick="goToStep(3)" class="w-full bg-gray-800 text-white font-bold py-3 rounded-xl hover:bg-black transition-colors flex items-center justify-center gap-2">
+                            <i data-lucide="layers" width="18" height="18"></i> Re-Plan (Edit List)
+                        </button>
+                        <button onclick="handleNewPlan()" class="w-full bg-white text-orange-600 border-2 border-orange-100 font-bold py-3 rounded-xl hover:bg-orange-50 transition-colors flex items-center justify-center gap-2">
+                            <i data-lucide="refresh-cw" width="18" height="18"></i> New Plan (Start Over)
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+    </script>
+</body>
+</html>
